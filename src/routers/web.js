@@ -6,36 +6,26 @@ let router = express.Router();
 
 let initWebRoutes = (app) => {
     router.get("/webhook", (req, res) => {
-        console.log("=== WEBHOOK GET REQUEST ===");
-        const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
         let mode = req.query["hub.mode"];
         let token = req.query["hub.verify_token"];
         let challenge = req.query["hub.challenge"];
 
-        console.log("Mode:", mode);
-        console.log("Token:", token); 
-        console.log("Challenge:", challenge);
-
-        if (mode === "subscribe" && token === VERIFY_TOKEN) {
+        if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
             console.log("WEBHOOK_VERIFIED");
             res.status(200).send(challenge);
         } else {
-            console.log("VERIFICATION_FAILED");
             res.sendStatus(403);
         }
     });
 
     router.post("/webhook", async (req, res) => {
-        console.log("=== WEBHOOK POST REQUEST ===");
         let body = req.body;
 
         if (body.object === 'page') {
             for (let entry of body.entry) {
                 let webhook_event = entry.messaging[0];
                 let sender_psid = webhook_event.sender.id;
-                
-                console.log("Sender PSID:", sender_psid);
-                
+
                 if (webhook_event.message) {
                     await handleMessage(sender_psid, webhook_event.message);
                 }
@@ -50,26 +40,46 @@ let initWebRoutes = (app) => {
 };
 
 async function handleMessage(sender_psid, received_message) {
-    console.log("=== HANDLING MESSAGE ===");
     let response;
 
     if (received_message.text) {
         try {
+            // Gửi typing indicator
+            await sendTypingOn(sender_psid);
+            
             const aiResponse = await difyService.chat(received_message.text);
+            
+            await sendTypingOff(sender_psid);
+
             response = {
-                "text": aiResponse
+                "messaging_type": "RESPONSE",
+                "recipient": {
+                    "id": sender_psid
+                },
+                "message": {
+                    "text": aiResponse
+                }
             };
         } catch (error) {
-            console.error("Error getting AI response:", error);
             response = {
-                "text": "Xin lỗi, tôi đang gặp sự cố. Vui lòng thử lại sau."
+                "messaging_type": "RESPONSE",
+                "recipient": {
+                    "id": sender_psid
+                },
+                "message": {
+                    "text": "Xin lỗi, tôi đang gặp sự cố. Vui lòng thử lại sau."
+                }
             };
         }
-    } 
-    else if (received_message.attachments) {
-        let attachment_type = received_message.attachments[0].type;
+    } else if (received_message.attachments) {
         response = {
-            "text": `Tôi đã nhận được ${attachment_type} của bạn. Bạn có thể gửi tin nhắn văn bản để tôi có thể trả lời.`
+            "messaging_type": "RESPONSE", 
+            "recipient": {
+                "id": sender_psid
+            },
+            "message": {
+                "text": `Tôi đã nhận được ${received_message.attachments[0].type} của bạn. Bạn có thể gửi tin nhắn văn bản để tôi có thể trả lời.`
+            }
         };
     }
 
@@ -78,19 +88,34 @@ async function handleMessage(sender_psid, received_message) {
     }
 }
 
-function callSendAPI(sender_psid, response) {
+async function sendTypingOn(sender_psid) {
+    const requestBody = {
+        "recipient": {
+            "id": sender_psid
+        },
+        "sender_action": "typing_on"
+    };
+
+    await callSendAPI(sender_psid, requestBody);
+}
+
+async function sendTypingOff(sender_psid) {
+    const requestBody = {
+        "recipient": {
+            "id": sender_psid
+        },
+        "sender_action": "typing_off"
+    };
+
+    await callSendAPI(sender_psid, requestBody);
+}
+
+function callSendAPI(sender_psid, request_body) {
     console.log("=== SENDING MESSAGE ===");
     console.log("To:", sender_psid);
-    console.log("Response:", response);
+    console.log("Request body:", request_body);
 
     return new Promise((resolve, reject) => {
-        let request_body = {
-            "recipient": {
-                "id": sender_psid
-            },
-            "message": response
-        };
-
         request({
             "uri": "https://graph.facebook.com/v2.6/me/messages",
             "qs": { "access_token": process.env.PAGE_ACCESS_TOKEN },
