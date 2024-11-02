@@ -13,7 +13,7 @@ let initWebRoutes = (app) => {
         let challenge = req.query["hub.challenge"];
 
         console.log("Mode:", mode);
-        console.log("Token:", token);
+        console.log("Token:", token); 
         console.log("Challenge:", challenge);
 
         if (mode === "subscribe" && token === VERIFY_TOKEN) {
