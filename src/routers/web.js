@@ -27,8 +27,6 @@ let initWebRoutes = (app) => {
 
     router.post("/webhook", async (req, res) => {
         console.log("=== WEBHOOK POST REQUEST ===");
-        console.log("Request body:", JSON.stringify(req.body, null, 2));
-
         let body = req.body;
 
         if (body.object === 'page') {
@@ -37,16 +35,13 @@ let initWebRoutes = (app) => {
                 let sender_psid = webhook_event.sender.id;
                 
                 console.log("Sender PSID:", sender_psid);
-                console.log("Event:", JSON.stringify(webhook_event, null, 2));
-
+                
                 if (webhook_event.message) {
-                    console.log("Processing message event");
                     await handleMessage(sender_psid, webhook_event.message);
                 }
             }
             res.status(200).send('EVENT_RECEIVED');
         } else {
-            console.log("Not a page event");
             res.sendStatus(404);
         }
     });
@@ -56,24 +51,30 @@ let initWebRoutes = (app) => {
 
 async function handleMessage(sender_psid, received_message) {
     console.log("=== HANDLING MESSAGE ===");
-    console.log("Message:", received_message);
+    let response;
 
-    if (!received_message.text) {
-        console.log("Not a text message");
-        return;
+    if (received_message.text) {
+        try {
+            const aiResponse = await difyService.chat(received_message.text);
+            response = {
+                "text": aiResponse
+            };
+        } catch (error) {
+            console.error("Error getting AI response:", error);
+            response = {
+                "text": "Xin lỗi, tôi đang gặp sự cố. Vui lòng thử lại sau."
+            };
+        }
+    } 
+    else if (received_message.attachments) {
+        let attachment_type = received_message.attachments[0].type;
+        response = {
+            "text": `Tôi đã nhận được ${attachment_type} của bạn. Bạn có thể gửi tin nhắn văn bản để tôi có thể trả lời.`
+        };
     }
 
-    try {
-        console.log("Getting AI response");
-        const aiResponse = await difyService.chat(received_message.text);
-        console.log("AI Response:", aiResponse);
-
-        console.log("Sending response to user");
-        await callSendAPI(sender_psid, {
-            "text": aiResponse
-        });
-    } catch (error) {
-        console.error("Error in handleMessage:", error);
+    if (response) {
+        await callSendAPI(sender_psid, response);
     }
 }
 
