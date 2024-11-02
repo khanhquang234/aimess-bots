@@ -40,84 +40,55 @@ let initWebRoutes = (app) => {
 };
 
 async function handleMessage(sender_psid, received_message) {
-    let response;
+    try {
+        // Gửi typing indicator
+        await sendTypingOn(sender_psid);
 
-    if (received_message.text) {
-        try {
-            // Gửi typing indicator
-            await sendTypingOn(sender_psid);
-            
-            const aiResponse = await difyService.chat(received_message.text);
-            
-            await sendTypingOff(sender_psid);
-
+        let response;
+        if (received_message.text) {
+            // Gọi Dify API với sender_psid
+            const aiResponse = await difyService.chat(received_message.text, sender_psid);
             response = {
-                "messaging_type": "RESPONSE",
-                "recipient": {
-                    "id": sender_psid
-                },
-                "message": {
-                    "text": aiResponse
-                }
+                "text": aiResponse
             };
-        } catch (error) {
+        } else if (received_message.attachments) {
             response = {
-                "messaging_type": "RESPONSE",
-                "recipient": {
-                    "id": sender_psid
-                },
-                "message": {
-                    "text": "Xin lỗi, tôi đang gặp sự cố. Vui lòng thử lại sau."
-                }
+                "text": "Bạn vui lòng gửi tin nhắn văn bản để tôi có thể trả lời."
             };
         }
-    } else if (received_message.attachments) {
-        response = {
-            "messaging_type": "RESPONSE", 
-            "recipient": {
-                "id": sender_psid
-            },
-            "message": {
-                "text": `Tôi đã nhận được ${received_message.attachments[0].type} của bạn. Bạn có thể gửi tin nhắn văn bản để tôi có thể trả lời.`
-            }
-        };
-    }
 
-    if (response) {
-        await callSendAPI(sender_psid, response);
+        await sendTypingOff(sender_psid);
+
+        if (response) {
+            await callSendAPI(sender_psid, response);
+        }
+    } catch (error) {
+        console.error("Error handling message:", error);
+        await callSendAPI(sender_psid, {
+            "text": "Xin lỗi, tôi đang gặp sự cố. Vui lòng thử lại sau."
+        });
     }
 }
 
-async function sendTypingOn(sender_psid) {
-    const requestBody = {
+function sendTypingOn(sender_psid) {
+    return callSendAPI(sender_psid, {"sender_action": "typing_on"});
+}
+
+function sendTypingOff(sender_psid) {
+    return callSendAPI(sender_psid, {"sender_action": "typing_off"});
+}
+
+function callSendAPI(sender_psid, response) {
+    let request_body = {
         "recipient": {
             "id": sender_psid
         },
-        "sender_action": "typing_on"
+        ...response
     };
-
-    await callSendAPI(sender_psid, requestBody);
-}
-
-async function sendTypingOff(sender_psid) {
-    const requestBody = {
-        "recipient": {
-            "id": sender_psid
-        },
-        "sender_action": "typing_off"
-    };
-
-    await callSendAPI(sender_psid, requestBody);
-}
-
-function callSendAPI(sender_psid, request_body) {
-    console.log("=== SENDING MESSAGE ===");
-    console.log("To:", sender_psid);
-    console.log("Request body:", request_body);
 
     return new Promise((resolve, reject) => {
         request({
-            "uri": "https://graph.facebook.com/v2.6/me/messages",
+            "uri": "https://graph.facebook.com/v18.0/me/messages",
             "qs": { "access_token": process.env.PAGE_ACCESS_TOKEN },
             "method": "POST",
             "json": request_body
