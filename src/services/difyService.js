@@ -4,12 +4,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const DIFY_API_URL = 'https://api.dify.ai/v1';
-const DIFY_API_KEY = process.env.DIFY_API_KEY;
 
 const difyService = {
     async chat(message, user_id) {
         try {
             console.log("Calling Dify API with:", {message, user_id});
+            console.log("Using API Key:", process.env.DIFY_API_KEY?.substring(0, 10) + "...");
             
             const response = await axios.post(`${DIFY_API_URL}/chat-messages`, {
                 inputs: {},
@@ -19,7 +19,7 @@ const difyService = {
                 conversation_id: null
             }, {
                 headers: {
-                    'Authorization': `Bearer ${DIFY_API_KEY}`,
+                    'Authorization': `Bearer ${process.env.DIFY_API_KEY}`,
                     'Content-Type': 'application/json'
                 }
             });
