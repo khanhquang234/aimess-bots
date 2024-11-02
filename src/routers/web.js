@@ -9,23 +9,27 @@ let initWebRoutes = (app) => {
     });
 
     router.get("/webhook", (req, res) => {
+        // Hardcode token để test
+        const VERIFY_TOKEN = "your_custom_verify_token";
+        
         console.log("Webhook GET request received");
+        console.log("Expected token:", VERIFY_TOKEN);
         
         let mode = req.query["hub.mode"];
-        let token = req.query["hub.verify_token"]; 
+        let token = req.query["hub.verify_token"];
         let challenge = req.query["hub.challenge"];
 
-        console.log("mode =", mode);
-        console.log("token =", token);
-        console.log("challenge =", challenge);
-        console.log("Expected token =", process.env.VERIFY_TOKEN);
+        console.log("Received mode:", mode);
+        console.log("Received token:", token); 
+        console.log("Received challenge:", challenge);
 
-        // Kiểm tra chính xác token
-        if (mode === "subscribe" && token === "your_custom_verify_token") {
+        // So sánh chính xác token
+        if (mode === "subscribe" && token === VERIFY_TOKEN) {
             console.log("WEBHOOK_VERIFIED");
             res.status(200).send(challenge);
         } else {
-            console.log("VERIFICATION_FAILED"); 
+            console.log("VERIFICATION_FAILED");
+            console.log("Token không khớp");
             res.sendStatus(403);
         }
     });
